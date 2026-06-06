@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,14 @@ class FlightDetails:
     origin: str | None = None
     destination: str | None = None
     aircraft_type: str | None = None
+
+
+@dataclass(frozen=True)
+class WeatherSnapshot:
+    temperature_f: float | None
+    relative_humidity: int | None
+    wind_speed_mph: float | None
+    observed_at: datetime
 
 
 @dataclass(frozen=True)

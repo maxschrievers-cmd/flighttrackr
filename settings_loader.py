@@ -105,6 +105,10 @@ class DisplaySettings:
     status_frame_seconds: float
     status_message_seconds: int
     alert_hold_seconds: int
+    idle_mode: str
+    clock_every_facts: int
+    weather_enabled: bool
+    weather_refresh_minutes: int
     fact_rotate_seconds: int
     fact_wipe_frame_seconds: float
     recovery_retry_seconds: int
@@ -169,6 +173,17 @@ def _get_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_display_idle_mode(value: str) -> str:
+    normalized = value.strip().lower()
+    valid_modes = {"facts", "clock", "mixed"}
+    if normalized not in valid_modes:
+        raise ValueError(
+            "display_idle_mode must be one of "
+            f"{', '.join(sorted(valid_modes))} in {CONFIG_PATH}"
+        )
+    return normalized
 
 
 def _parse_clock_time(value: str) -> time:
@@ -384,6 +399,30 @@ def load_settings() -> Settings:
             alert_hold_seconds=_get_int(
                 "FLIGHTTRACKR_LCD_ALERT_HOLD_SECONDS",
                 int(common_table["display_alert_hold_seconds"]),
+            ),
+            idle_mode=_normalize_display_idle_mode(
+                _get_str(
+                    "FLIGHTTRACKR_LCD_IDLE_MODE",
+                    str(common_table.get("display_idle_mode", "facts")),
+                )
+            ),
+            clock_every_facts=max(
+                1,
+                _get_int(
+                    "FLIGHTTRACKR_LCD_CLOCK_EVERY_FACTS",
+                    int(common_table.get("display_clock_every_facts", 3)),
+                ),
+            ),
+            weather_enabled=_get_bool(
+                "FLIGHTTRACKR_WEATHER_ENABLED",
+                bool(common_table.get("display_weather_enabled", True)),
+            ),
+            weather_refresh_minutes=max(
+                1,
+                _get_int(
+                    "FLIGHTTRACKR_WEATHER_REFRESH_MINUTES",
+                    int(common_table.get("display_weather_refresh_minutes", 15)),
+                ),
             ),
         ),
     )

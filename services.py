@@ -11,7 +11,7 @@ from airportdb_client import AirportDbClient
 from formatter import build_alert_event, get_airline_name
 from flightaware_client import FlightAwareClient
 from lcd_display import NullDisplay
-from models import FlightState
+from models import FlightState, WeatherSnapshot
 from opensky_client import OpenSkyClient
 
 
@@ -163,6 +163,84 @@ class LocationService:
         self.status_callback(title, detail)
 
 
+class WeatherClient:
+    def __init__(
+        self,
+        request_timeout_seconds: int = 5,
+        refresh_minutes: int = 15,
+        status_callback: Callable[[str, str], None] | None = None,
+    ) -> None:
+        self.session = requests.Session()
+        self.request_timeout_seconds = request_timeout_seconds
+        self.refresh_seconds = max(1, refresh_minutes) * 60
+        self.status_callback = status_callback
+        self._last_fetch_at = 0.0
+        self._last_snapshot: WeatherSnapshot | None = None
+
+    def get_current_weather(self, latitude: float, longitude: float) -> WeatherSnapshot | None:
+        now = time.monotonic()
+        if self._last_snapshot is not None and now - self._last_fetch_at < self.refresh_seconds:
+            return self._last_snapshot
+        if (
+            self._last_snapshot is None
+            and self._last_fetch_at
+            and now - self._last_fetch_at < 60
+        ):
+            return None
+
+        self._last_fetch_at = now
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m",
+            "temperature_unit": "fahrenheit",
+            "wind_speed_unit": "mph",
+            "timezone": "auto",
+        }
+        try:
+            response = self.session.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params=params,
+                timeout=self.request_timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.exceptions.RequestException as exc:
+            logger.warning("Could not fetch weather: %s", exc)
+            self._notify_network_status(exc)
+            return self._last_snapshot
+
+        current = payload.get("current") or {}
+        snapshot = WeatherSnapshot(
+            temperature_f=self._coerce_float(current.get("temperature_2m")),
+            relative_humidity=self._coerce_int(current.get("relative_humidity_2m")),
+            wind_speed_mph=self._coerce_float(current.get("wind_speed_10m")),
+            observed_at=datetime.now(),
+        )
+        self._last_snapshot = snapshot
+        return snapshot
+
+    def _notify_network_status(self, exc: requests.exceptions.RequestException) -> None:
+        if self.status_callback is None:
+            return
+        if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+            self.status_callback("WiFi Error", "Weather failed")
+            return
+        self.status_callback("Weather Err", "Lookup failed")
+
+    def _coerce_float(self, value: object) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _coerce_int(self, value: object) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+
 class FlightTracker:
     def __init__(
         self,
@@ -182,6 +260,7 @@ class FlightTracker:
         flightaware_client: FlightAwareClient | None = None,
         airportdb_client: AirportDbClient | None = None,
         display: NullDisplay | None = None,
+        weather_client: WeatherClient | None = None,
     ) -> None:
         self.client = client
         self.alert_cache = alert_cache
@@ -198,6 +277,9 @@ class FlightTracker:
         self.location_service = location_service or LocationService()
         self.display = display or NullDisplay()
         self.location_service.status_callback = self._show_display_error
+        self.weather_client = weather_client
+        if self.weather_client is not None:
+            self.weather_client.status_callback = self._show_display_error
         self.audio_player = audio_player
         if self.audio_player is None:
             raise ValueError("FlightTracker requires an AudioPlayer instance.")
@@ -271,6 +353,7 @@ class FlightTracker:
                     until_text=self.snooze_end_time.strftime("%I:%M %p").lstrip("0"),
                 )
                 self._snooze_active = is_snoozed
+                self._refresh_display_weather()
                 if is_snoozed:
                     pass
                 else:
@@ -290,6 +373,12 @@ class FlightTracker:
 
     def _show_display_error(self, title: str, detail: str) -> None:
         self.display.show_error(title, detail)
+
+    def _refresh_display_weather(self) -> None:
+        if self.weather_client is None:
+            return
+        weather = self.weather_client.get_current_weather(self.latitude, self.longitude)
+        self.display.set_weather(weather)
 
     def _wait_until_next_poll(self) -> None:
         deadline = time.monotonic() + self.poll_interval_seconds

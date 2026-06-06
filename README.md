@@ -232,7 +232,7 @@ cp config.example.toml config.toml
 The top of `config.toml` is arranged for the settings most people care about first:
 
 - `[api_keys]` for OpenSky, FlightAware, and AirportDB credentials
-- `[common]` for location, radius, snooze hours, volume, usage caps, and the main OLED timing knobs
+- `[common]` for location, radius, snooze hours, volume, usage caps, and the main OLED mode/timing knobs
 - advanced sections below for request timeouts, cache TTLs, logging, paths, and low-level display settings
 
 The Python loader in `settings_loader.py` reads `config.toml` and then applies environment variables as overrides. That makes `config.toml` the easiest file for most users to edit, while still letting you keep secrets or deployment-specific values in env vars.
@@ -267,6 +267,14 @@ Plan on needing billing setup for FlightAware. Their AeroAPI product is usage-ba
 Put all of your credentials directly into `config.toml`. That is the intended setup for this project and the simplest path for most users.
 
 The default OLED settings in `config.toml` assume I2C bus `1`, address `0x3C`, and normal orientation. If your display uses a different I2C address or is mounted upside down, adjust those values in the display sections of `config.toml`.
+
+For idle OLED content, set `display_idle_mode` in `[common]`:
+
+- `facts` rotates airplane facts, matching the original behavior
+- `clock` shows a digital clock, date, and basic weather
+- `mixed` rotates facts and inserts the clock/weather screen after `display_clock_every_facts` facts
+
+The weather line uses Open-Meteo with your configured `latitude` and `longitude`, so it does not require another API key. Set `display_weather_enabled = false` if you only want the clock/date screen.
 
 ## Run
 
@@ -373,7 +381,7 @@ If FlightAware is configured and the callsign looks like a known airline, the al
 - origin and destination airports
 - a cleaned-up aircraft type like `CRJ-900` instead of a longer manufacturer-prefixed label
 
-When the display is idle, it rotates airplane facts in random order without repeats until the full fact list has been shown.
+When the display is idle, it can rotate airplane facts, show a clock/date/weather screen, or mix the two depending on `display_idle_mode`. Airplane facts still rotate in random order without repeats until the full fact list has been shown.
 
 ## Notes
 

@@ -12,7 +12,7 @@ from settings_loader import (
 from flightaware_client import FlightAwareClient
 from lcd_display import build_display
 from opensky_client import OpenSkyClient
-from services import AlertCache, AudioPlayer, FlightTracker, LocationService
+from services import AlertCache, AudioPlayer, FlightTracker, LocationService, WeatherClient
 
 
 def configure_logging(logging_settings: LoggingSettings, log_path: Path) -> None:
@@ -96,6 +96,14 @@ def main() -> None:
             request_timeout_seconds=airportdb_settings.request_timeout_seconds,
         ),
         display=build_display(display_settings=display_settings, airplane_facts_path=paths.airplane_facts_path),
+        weather_client=(
+            WeatherClient(
+                request_timeout_seconds=location_settings.request_timeout_seconds,
+                refresh_minutes=display_settings.weather_refresh_minutes,
+            )
+            if display_settings.weather_enabled and display_settings.idle_mode in {"clock", "mixed"}
+            else None
+        ),
     )
     tracker.run_forever()
 

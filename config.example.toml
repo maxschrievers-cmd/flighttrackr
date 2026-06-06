@@ -45,6 +45,13 @@ display_enabled = true
 display_rotate = 0
 # How long to keep an airplane alert on screen after it appears.
 display_alert_hold_seconds = 300
+# Idle OLED content: "facts", "clock", or "mixed".
+display_idle_mode = "facts"
+# In mixed mode, show the clock/weather screen after this many facts.
+display_clock_every_facts = 3
+# Fetch basic clock-screen weather from Open-Meteo using your latitude/longitude.
+display_weather_enabled = true
+display_weather_refresh_minutes = 15
 # How long each airplane fact stays on screen.
 display_fact_rotate_seconds = 120
 # Backlight idle timeout in seconds, if your hardware supports it.

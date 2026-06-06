@@ -3,10 +3,11 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from settings_loader import DisplaySettings
-from models import AlertEvent
+from models import AlertEvent, WeatherSnapshot
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,9 @@ class NullDisplay:
         return
 
     def set_snooze_status(self, active: bool, until_text: str) -> None:
+        return
+
+    def set_weather(self, weather: WeatherSnapshot | None) -> None:
         return
 
     def idle_step(self) -> None:
@@ -108,13 +112,17 @@ class Ssd1309OledDisplay:
         self._status_frames: list[str] = []
         self._status_frame_index = 0
         self._fact_lines: list[str] = []
+        self._idle_screen_kind = "clock" if settings.idle_mode == "clock" else "fact"
         self._showing_snooze_message = False
         self._snooze_active = False
         self._snooze_until_text = ""
         self._facts_since_snooze_message = 0
+        self._facts_since_clock = 0
+        self._weather: WeatherSnapshot | None = None
         self._random = random.Random()
         self._fact_cycle: list[int] = []
         self._next_fact_at = 0.0
+        self._next_clock_refresh_at = 0.0
         self._next_frame_at = 0.0
         self._display_available = True
         self._display_recovery_due_at = 0.0
@@ -160,12 +168,17 @@ class Ssd1309OledDisplay:
         self._facts_since_snooze_message = 0
         self._showing_snooze_message = False
 
+    def set_weather(self, weather: WeatherSnapshot | None) -> None:
+        self._weather = weather
+        if self._mode == "idle" and self._idle_screen_kind == "clock":
+            self._render_idle_clock_screen()
+
     def idle_step(self) -> None:
         now = time.monotonic()
 
         if self._current_alert is not None and now >= self._current_alert_expires_at:
             self._clear_alert()
-            self._show_idle_fact()
+            self._show_idle_screen()
             return
 
         if self._temporary_message_expires_at and now >= self._temporary_message_expires_at:
@@ -174,7 +187,7 @@ class Ssd1309OledDisplay:
                 self._mode = "alert"
                 self._render_alert_screen()
             else:
-                self._show_idle_fact()
+                self._show_idle_screen()
             return
 
         if now < self._next_frame_at:
@@ -187,7 +200,16 @@ class Ssd1309OledDisplay:
             return
 
         if self._mode == "idle" and now >= self._next_fact_at:
-            self._show_idle_fact(next_fact=True)
+            self._show_idle_screen(next_screen=True)
+            return
+
+        if (
+            self._mode == "idle"
+            and self._idle_screen_kind == "clock"
+            and now >= self._next_clock_refresh_at
+        ):
+            self._render_idle_clock_screen()
+            self._schedule_idle_refresh()
             return
 
         if self._mode in {"startup", "error", "idle"} and len(self._status_frames) > 1:
@@ -222,8 +244,31 @@ class Ssd1309OledDisplay:
 
         self._show_image(image)
 
+    def _show_idle_screen(self, next_screen: bool = False) -> None:
+        screen_kind = (
+            self._next_idle_screen_kind()
+            if next_screen or not self._fact_lines
+            else self._idle_screen_kind
+        )
+        if screen_kind == "clock":
+            self._show_idle_clock(next_screen=next_screen)
+            return
+        self._show_idle_fact(next_fact=next_screen)
+
+    def _next_idle_screen_kind(self) -> str:
+        if self._settings.idle_mode == "clock":
+            return "clock"
+        if self._settings.idle_mode == "facts":
+            return "fact"
+        if self._facts_since_clock >= self._settings.clock_every_facts:
+            self._facts_since_clock = 0
+            return "clock"
+        self._facts_since_clock += 1
+        return "fact"
+
     def _show_idle_fact(self, next_fact: bool = False) -> None:
         self._mode = "idle"
+        self._idle_screen_kind = "fact"
         if next_fact or not self._fact_lines:
             fact_text = self._next_idle_message()
         else:
@@ -240,8 +285,32 @@ class Ssd1309OledDisplay:
         self._status_frames = []
         self._status_frame_index = 0
         self._render_idle_fact_screen()
-        self._next_fact_at = time.monotonic() + self._settings.fact_rotate_seconds
+        self._schedule_idle_refresh()
+
+    def _show_idle_clock(self, next_screen: bool = False) -> None:
+        self._mode = "idle"
+        self._idle_screen_kind = "clock"
+        self._status_frames = []
+        self._status_frame_index = 0
+        if next_screen and self._fact_lines:
+            self._animate_fact_wipe()
+        self._render_idle_clock_screen()
+        self._schedule_idle_refresh()
+
+    def _schedule_idle_refresh(self) -> None:
+        now = time.monotonic()
+        if self._idle_screen_kind == "clock":
+            self._next_fact_at = now + self._settings.fact_rotate_seconds
+            self._next_clock_refresh_at = now + self._seconds_until_next_minute()
+            self._next_frame_at = min(self._next_fact_at, self._next_clock_refresh_at)
+            return
+        self._next_fact_at = now + self._settings.fact_rotate_seconds
+        self._next_clock_refresh_at = 0.0
         self._next_frame_at = self._next_fact_at
+
+    def _seconds_until_next_minute(self) -> float:
+        now = datetime.now()
+        return max(1.0, 60.0 - now.second - (now.microsecond / 1_000_000))
 
     def _clear_alert(self) -> None:
         self._current_alert = None
@@ -282,6 +351,45 @@ class Ssd1309OledDisplay:
         for index, line in enumerate(fact_lines):
             self._draw_centered_text(draw, start_y + (index * line_height), line, self._subtitle_font)
         return image
+
+    def _render_idle_clock_screen(self) -> None:
+        image = self._image_module.new("1", (self.width, self.height), 0)
+        draw = self._draw_module.Draw(image)
+
+        now = datetime.now()
+        time_text = now.strftime("%I:%M").lstrip("0")
+        ampm_text = now.strftime("%p")
+        date_text = now.strftime("%a %b %-d")
+        if "%-" in date_text:
+            date_text = now.strftime("%a %b %d").replace(" 0", " ")
+        weather_text = self._format_weather_line()
+
+        draw.rounded_rectangle((0, 0, self.width - 1, self.height - 1), radius=6, outline=1, width=1)
+        self._draw_centered_text(draw, 5, date_text, self._subtitle_font)
+        self._draw_centered_text(draw, 19, time_text, self._title_font)
+        self._draw_right_text(draw, 25, self.width - 12, ampm_text, self._widget_label_font)
+        draw.line((12, 45, self.width - 13, 45), fill=1, width=1)
+        self._draw_centered_text(
+            draw,
+            50,
+            self._fit_text(weather_text, self._widget_label_font, 112),
+            self._widget_label_font,
+        )
+
+        self._show_image(image)
+
+    def _format_weather_line(self) -> str:
+        if self._weather is None:
+            return "Weather unavailable"
+
+        parts: list[str] = []
+        if self._weather.temperature_f is not None:
+            parts.append(f"{round(self._weather.temperature_f)}F")
+        if self._weather.relative_humidity is not None:
+            parts.append(f"{self._weather.relative_humidity}% RH")
+        if self._weather.wind_speed_mph is not None:
+            parts.append(f"Wind {round(self._weather.wind_speed_mph)} mph")
+        return "  ".join(parts) if parts else "Weather unavailable"
 
     def _animate_fact_wipe(self) -> None:
         base_image = self._build_idle_fact_image(self._fact_lines)
