@@ -9,7 +9,7 @@ FlightTrackr watches nearby OpenSky traffic and logs a quick alert when a new fl
 - Pauses normal polling during your configured snooze hours
 - Uses FlightAware only for callsigns that look like known airlines, which avoids spending API calls on many local GA flights
 - Stops FlightAware enrichment entirely once your configured monthly cap is reached
-- Plays the stronger `alert.mp3` sound for squawk `7700` or `7500`, and `chime.mp3` for normal alerts
+- Plays the stronger `alert.mp3` sound for squawk `7700` or `7500`, `chime.mp3` for known-airline alerts, and `bell.mp3` for private/non-airline alerts
 - Shows active alerts on the OLED, then rotates airplane facts while idle
 
 ## What you need
@@ -369,7 +369,8 @@ This means you can still see nearby aircraft from OpenSky without necessarily sp
 
 When a new flight is detected inside the configured radius, the app will:
 
-- Play `assets/chime.mp3` for normal alerts
+- Play `assets/chime.mp3` for known-airline alerts
+- Play `assets/bell.mp3` for private/non-airline alerts
 - Play `assets/alert.mp3` for squawk `7700` or `7500`
 - Log the flight details to the console
 - Show alerts and system status on the OLED when enabled

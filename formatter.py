@@ -136,9 +136,11 @@ def format_detailed_secondary_line(
     return " | ".join(details)
 
 
-def get_alert_sound(assets_dir: Path, squawk: str | None) -> Path:
+def get_alert_sound(assets_dir: Path, squawk: str | None, airline: str | None) -> Path:
     if squawk in {"7500", "7700"}:
         return assets_dir / "alert.mp3"
+    if airline is None:
+        return assets_dir / "bell.mp3"
     return assets_dir / "chime.mp3"
 
 
@@ -185,7 +187,7 @@ def build_alert_event(
         callsign=flight.callsign,
         line_1=line_1,
         line_2=line_2,
-        sound_path=str(get_alert_sound(assets_dir, flight.squawk)),
+        sound_path=str(get_alert_sound(assets_dir, flight.squawk, airline)),
         title=flight.callsign,
         subtitle=format_airline_display_line(flight.callsign, airline),
         route=format_route(

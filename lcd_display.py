@@ -94,7 +94,9 @@ class Ssd1309OledDisplay:
         self._measure_draw = ImageDraw.Draw(self._measure_image)
 
         self._title_font = self._load_font(16)
-        self._clock_font = self._load_font(22, prefer_mono=True)
+        self._clock_font = self._load_font(29, prefer_mono=True)
+        self._weather_temp_font = self._load_font(10, prefer_mono=True)
+        self._weather_small_font = self._load_font(8, prefer_mono=True)
         self._callsign_font = self._load_font(9)
         self._airline_font = self._load_font(10)
         self._subtitle_font = self._load_font(8)
@@ -364,37 +366,84 @@ class Ssd1309OledDisplay:
         else:
             time_text = now.strftime("%I:%M").lstrip("0")
             ampm_text = now.strftime("%p")
-        date_text = now.strftime("%a %b %-d")
+        date_text = now.strftime("%a, %b %-d")
         if "%-" in date_text:
-            date_text = now.strftime("%a %b %d").replace(" 0", " ")
-        weather_text = self._format_weather_line()
-
+            date_text = now.strftime("%a, %b %d").replace(" 0", " ")
         draw.rounded_rectangle((0, 0, self.width - 1, self.height - 1), radius=6, outline=1, width=1)
-        self._draw_centered_text(draw, 3, date_text, self._subtitle_font)
-        self._draw_digital_clock(draw, time_text, ampm_text)
-        self._draw_weather_icon(draw, 12, 47)
-        self._draw_left_text(
-            draw,
-            50,
-            32,
-            self._fit_text(weather_text, self._widget_label_font, 92),
-            self._widget_label_font,
-        )
+        self._draw_digital_clock(draw, time_text, ampm_text, date_text)
+        self._draw_weather_stack(draw)
 
         self._show_image(image)
 
-    def _draw_digital_clock(self, draw, time_text: str, ampm_text: str) -> None:
-        panel = (7, 14, self.width - 8, 43)
-        draw.rectangle(panel, outline=1, fill=0)
-        draw.rectangle((panel[0] + 2, panel[1] + 2, panel[2] - 2, panel[3] - 2), outline=1)
+    def _draw_digital_clock(self, draw, time_text: str, ampm_text: str, date_text: str) -> None:
+        time_area_left = 4
+        time_area_right = 91
         time_width = self._text_width(time_text, self._clock_font)
-        ampm_width = self._text_width(ampm_text, self._widget_label_font) if ampm_text else 0
-        gap = 4 if ampm_text else 0
-        total_width = time_width + gap + ampm_width
-        x = panel[0] + max(0, ((panel[2] - panel[0] + 1) - total_width) // 2)
-        draw.text((x, 16), time_text, font=self._clock_font, fill=1)
+        x = time_area_left + max(0, ((time_area_right - time_area_left + 1) - time_width) // 2)
+        draw.text((x, 9), time_text, font=self._clock_font, fill=1)
         if ampm_text:
-            draw.text((x + time_width + gap, 28), ampm_text, font=self._widget_label_font, fill=1)
+            ampm_width = self._text_width(ampm_text, self._weather_small_font)
+            ampm_x = x + time_width + 1
+            if ampm_x + ampm_width <= time_area_right:
+                draw.text((ampm_x, 34), ampm_text, font=self._weather_small_font, fill=1)
+        self._draw_centered_text(
+            draw,
+            47,
+            self._fit_text(date_text, self._route_font, 86),
+            self._route_font,
+            left=time_area_left,
+            right=time_area_right,
+        )
+
+    def _draw_weather_stack(self, draw) -> None:
+        left = 94
+        right = self.width - 4
+        self._draw_weather_icon(draw, left + 2, 5)
+        current_text, high_text, low_text = self._format_weather_stack_lines()
+        self._draw_centered_text(
+            draw,
+            27,
+            self._fit_text(current_text, self._weather_temp_font, right - left + 1),
+            self._weather_temp_font,
+            left=left,
+            right=right,
+        )
+        self._draw_centered_text(
+            draw,
+            40,
+            self._fit_text(high_text, self._weather_small_font, right - left + 1),
+            self._weather_small_font,
+            left=left,
+            right=right,
+        )
+        self._draw_centered_text(
+            draw,
+            50,
+            self._fit_text(low_text, self._weather_small_font, right - left + 1),
+            self._weather_small_font,
+            left=left,
+            right=right,
+        )
+
+    def _format_weather_stack_lines(self) -> tuple[str, str, str]:
+        if self._weather is None:
+            return "--°", "H--°", "L--°"
+        current = (
+            self._format_temperature(self._weather.temperature)
+            if self._weather.temperature is not None
+            else f"--°{self._weather.temperature_unit}"
+        )
+        high = (
+            self._format_temperature(self._weather.high_temperature, include_unit=False)
+            if self._weather.high_temperature is not None
+            else "--°"
+        )
+        low = (
+            self._format_temperature(self._weather.low_temperature, include_unit=False)
+            if self._weather.low_temperature is not None
+            else "--°"
+        )
+        return current, f"H{high}", f"L{low}"
 
     def _draw_weather_icon(self, draw, left: int, top: int) -> None:
         kind = self._weather_icon_kind()
@@ -473,11 +522,10 @@ class Ssd1309OledDisplay:
         draw.point((left + 15, top + 13), fill=1)
 
     def _draw_cloud_icon(self, draw, left: int, top: int) -> None:
-        draw.arc((left + 1, top + 4, left + 9, top + 12), 180, 360, fill=1)
-        draw.arc((left + 6, top + 1, left + 16, top + 11), 180, 360, fill=1)
-        draw.arc((left + 13, top + 5, left + 21, top + 13), 180, 360, fill=1)
-        draw.line((left + 2, top + 10, left + 19, top + 10), fill=1)
-        draw.line((left + 2, top + 11, left + 19, top + 11), fill=1)
+        draw.ellipse((left + 1, top + 6, left + 9, top + 14), fill=1)
+        draw.ellipse((left + 5, top + 2, left + 15, top + 13), fill=1)
+        draw.ellipse((left + 12, top + 6, left + 21, top + 14), fill=1)
+        draw.rectangle((left + 4, top + 9, left + 18, top + 14), fill=1)
 
     def _draw_fog_icon(self, draw, left: int, top: int) -> None:
         self._draw_cloud_icon(draw, left, top - 1)
@@ -517,19 +565,6 @@ class Ssd1309OledDisplay:
         draw.arc((left, top, left + 18, top + 8), 180, 20, fill=1)
         draw.arc((left + 3, top + 5, left + 20, top + 13), 180, 20, fill=1)
         draw.line((left, top + 12, left + 12, top + 12), fill=1)
-
-    def _format_weather_line(self) -> str:
-        if self._weather is None:
-            return "Weather unavailable"
-
-        parts = [self._weather.condition]
-        if self._weather.temperature is not None:
-            parts.append(self._format_temperature(self._weather.temperature))
-        if self._weather.high_temperature is not None:
-            parts.append(f"H{self._format_temperature(self._weather.high_temperature, include_unit=False)}")
-        if self._weather.low_temperature is not None:
-            parts.append(f"L{self._format_temperature(self._weather.low_temperature, include_unit=False)}")
-        return " ".join(parts) if len(parts) > 1 else "Weather unavailable"
 
     def _format_temperature(self, value: float, include_unit: bool = True) -> str:
         unit = self._weather.temperature_unit if self._weather and include_unit else ""
