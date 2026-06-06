@@ -271,10 +271,10 @@ The default OLED settings in `config.toml` assume I2C bus `1`, address `0x3C`, a
 For idle OLED content, set `display_idle_mode` in `[common]`:
 
 - `facts` rotates airplane facts, matching the original behavior
-- `clock` shows a digital clock, date, and basic weather
+- `clock` shows a digital clock, date, current conditions, current temperature, and today's high/low
 - `mixed` rotates facts and inserts the clock/weather screen after `display_clock_every_facts` facts
 
-The weather line uses Open-Meteo with your configured `latitude` and `longitude`, so it does not require another API key. Set `display_weather_enabled = false` if you only want the clock/date screen.
+The weather line uses Open-Meteo with your configured `latitude` and `longitude`, so it does not require another API key. Set `display_weather_enabled = false` if you only want the clock/date screen. Use `display_weather_temperature_unit` for `F` or `C`, and `display_clock_hour_format` for `12` or `24` hour time.
 
 ## Run
 

@@ -18,6 +18,38 @@ from opensky_client import OpenSkyClient
 logger = logging.getLogger(__name__)
 
 
+WMO_WEATHER_CONDITIONS = {
+    0: "Clear",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Cloudy",
+    45: "Fog",
+    48: "Rime fog",
+    51: "Drizzle",
+    53: "Drizzle",
+    55: "Drizzle",
+    56: "Freezing drizzle",
+    57: "Freezing drizzle",
+    61: "Rain",
+    63: "Rain",
+    65: "Heavy rain",
+    66: "Freezing rain",
+    67: "Freezing rain",
+    71: "Snow",
+    73: "Snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Rain showers",
+    81: "Rain showers",
+    82: "Heavy showers",
+    85: "Snow showers",
+    86: "Snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm",
+    99: "Thunderstorm",
+}
+
+
 class AudioPlayer:
     def __init__(
         self,
@@ -168,11 +200,13 @@ class WeatherClient:
         self,
         request_timeout_seconds: int = 5,
         refresh_minutes: int = 15,
+        temperature_unit: str = "fahrenheit",
         status_callback: Callable[[str, str], None] | None = None,
     ) -> None:
         self.session = requests.Session()
         self.request_timeout_seconds = request_timeout_seconds
         self.refresh_seconds = max(1, refresh_minutes) * 60
+        self.temperature_unit = temperature_unit
         self.status_callback = status_callback
         self._last_fetch_at = 0.0
         self._last_snapshot: WeatherSnapshot | None = None
@@ -192,8 +226,10 @@ class WeatherClient:
         params = {
             "latitude": latitude,
             "longitude": longitude,
-            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m",
-            "temperature_unit": "fahrenheit",
+            "current": "temperature_2m,weather_code,is_day,wind_speed_10m",
+            "daily": "temperature_2m_max,temperature_2m_min",
+            "forecast_days": 1,
+            "temperature_unit": self.temperature_unit,
             "wind_speed_unit": "mph",
             "timezone": "auto",
         }
@@ -211,9 +247,16 @@ class WeatherClient:
             return self._last_snapshot
 
         current = payload.get("current") or {}
+        daily = payload.get("daily") or {}
+        weather_code = self._coerce_int(current.get("weather_code"))
         snapshot = WeatherSnapshot(
-            temperature_f=self._coerce_float(current.get("temperature_2m")),
-            relative_humidity=self._coerce_int(current.get("relative_humidity_2m")),
+            condition=self._condition_label(weather_code),
+            weather_code=weather_code,
+            is_day=self._coerce_bool(current.get("is_day")),
+            temperature=self._coerce_float(current.get("temperature_2m")),
+            high_temperature=self._first_float(daily.get("temperature_2m_max")),
+            low_temperature=self._first_float(daily.get("temperature_2m_min")),
+            temperature_unit="F" if self.temperature_unit == "fahrenheit" else "C",
             wind_speed_mph=self._coerce_float(current.get("wind_speed_10m")),
             observed_at=datetime.now(),
         )
@@ -239,6 +282,29 @@ class WeatherClient:
             return int(value)
         except (TypeError, ValueError):
             return None
+
+    def _first_float(self, values: object) -> float | None:
+        if not isinstance(values, list) or not values:
+            return None
+        return self._coerce_float(values[0])
+
+    def _condition_label(self, value: object) -> str:
+        if value is None:
+            return "Weather"
+        return WMO_WEATHER_CONDITIONS.get(value, "Weather")
+
+    def _coerce_bool(self, value: object) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "day"}:
+                return True
+            if normalized in {"0", "false", "no", "night"}:
+                return False
+        return None
 
 
 class FlightTracker:

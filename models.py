@@ -36,8 +36,13 @@ class FlightDetails:
 
 @dataclass(frozen=True)
 class WeatherSnapshot:
-    temperature_f: float | None
-    relative_humidity: int | None
+    condition: str
+    weather_code: int | None
+    is_day: bool | None
+    temperature: float | None
+    high_temperature: float | None
+    low_temperature: float | None
+    temperature_unit: str
     wind_speed_mph: float | None
     observed_at: datetime
 

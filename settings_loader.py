@@ -109,6 +109,8 @@ class DisplaySettings:
     clock_every_facts: int
     weather_enabled: bool
     weather_refresh_minutes: int
+    weather_temperature_unit: str
+    clock_hour_format: str
     fact_rotate_seconds: int
     fact_wipe_frame_seconds: float
     recovery_retry_seconds: int
@@ -184,6 +186,24 @@ def _normalize_display_idle_mode(value: str) -> str:
             f"{', '.join(sorted(valid_modes))} in {CONFIG_PATH}"
         )
     return normalized
+
+
+def _normalize_weather_temperature_unit(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"f", "fahrenheit"}:
+        return "fahrenheit"
+    if normalized in {"c", "celsius"}:
+        return "celsius"
+    raise ValueError(f"display_weather_temperature_unit must be F or C in {CONFIG_PATH}")
+
+
+def _normalize_clock_hour_format(value: str) -> str:
+    normalized = value.strip().lower().replace("hour", "").strip()
+    if normalized in {"12", "12h"}:
+        return "12"
+    if normalized in {"24", "24h"}:
+        return "24"
+    raise ValueError(f"display_clock_hour_format must be 12 or 24 in {CONFIG_PATH}")
 
 
 def _parse_clock_time(value: str) -> time:
@@ -423,6 +443,18 @@ def load_settings() -> Settings:
                     "FLIGHTTRACKR_WEATHER_REFRESH_MINUTES",
                     int(common_table.get("display_weather_refresh_minutes", 15)),
                 ),
+            ),
+            weather_temperature_unit=_normalize_weather_temperature_unit(
+                _get_str(
+                    "FLIGHTTRACKR_WEATHER_TEMPERATURE_UNIT",
+                    str(common_table.get("display_weather_temperature_unit", "F")),
+                )
+            ),
+            clock_hour_format=_normalize_clock_hour_format(
+                _get_str(
+                    "FLIGHTTRACKR_LCD_CLOCK_HOUR_FORMAT",
+                    str(common_table.get("display_clock_hour_format", "12")),
+                )
             ),
         ),
     )

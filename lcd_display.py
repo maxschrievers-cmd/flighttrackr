@@ -94,6 +94,7 @@ class Ssd1309OledDisplay:
         self._measure_draw = ImageDraw.Draw(self._measure_image)
 
         self._title_font = self._load_font(16)
+        self._clock_font = self._load_font(22, prefer_mono=True)
         self._callsign_font = self._load_font(9)
         self._airline_font = self._load_font(10)
         self._subtitle_font = self._load_font(8)
@@ -357,39 +358,182 @@ class Ssd1309OledDisplay:
         draw = self._draw_module.Draw(image)
 
         now = datetime.now()
-        time_text = now.strftime("%I:%M").lstrip("0")
-        ampm_text = now.strftime("%p")
+        if self._settings.clock_hour_format == "24":
+            time_text = now.strftime("%H:%M")
+            ampm_text = ""
+        else:
+            time_text = now.strftime("%I:%M").lstrip("0")
+            ampm_text = now.strftime("%p")
         date_text = now.strftime("%a %b %-d")
         if "%-" in date_text:
             date_text = now.strftime("%a %b %d").replace(" 0", " ")
         weather_text = self._format_weather_line()
 
         draw.rounded_rectangle((0, 0, self.width - 1, self.height - 1), radius=6, outline=1, width=1)
-        self._draw_centered_text(draw, 5, date_text, self._subtitle_font)
-        self._draw_centered_text(draw, 19, time_text, self._title_font)
-        self._draw_right_text(draw, 25, self.width - 12, ampm_text, self._widget_label_font)
-        draw.line((12, 45, self.width - 13, 45), fill=1, width=1)
-        self._draw_centered_text(
+        self._draw_centered_text(draw, 3, date_text, self._subtitle_font)
+        self._draw_digital_clock(draw, time_text, ampm_text)
+        self._draw_weather_icon(draw, 12, 47)
+        self._draw_left_text(
             draw,
             50,
-            self._fit_text(weather_text, self._widget_label_font, 112),
+            32,
+            self._fit_text(weather_text, self._widget_label_font, 92),
             self._widget_label_font,
         )
 
         self._show_image(image)
 
+    def _draw_digital_clock(self, draw, time_text: str, ampm_text: str) -> None:
+        panel = (7, 14, self.width - 8, 43)
+        draw.rectangle(panel, outline=1, fill=0)
+        draw.rectangle((panel[0] + 2, panel[1] + 2, panel[2] - 2, panel[3] - 2), outline=1)
+        time_width = self._text_width(time_text, self._clock_font)
+        ampm_width = self._text_width(ampm_text, self._widget_label_font) if ampm_text else 0
+        gap = 4 if ampm_text else 0
+        total_width = time_width + gap + ampm_width
+        x = panel[0] + max(0, ((panel[2] - panel[0] + 1) - total_width) // 2)
+        draw.text((x, 16), time_text, font=self._clock_font, fill=1)
+        if ampm_text:
+            draw.text((x + time_width + gap, 28), ampm_text, font=self._widget_label_font, fill=1)
+
+    def _draw_weather_icon(self, draw, left: int, top: int) -> None:
+        kind = self._weather_icon_kind()
+        if kind == "sun":
+            self._draw_sun_icon(draw, left, top)
+        elif kind == "moon":
+            self._draw_moon_icon(draw, left, top)
+        elif kind == "partly_cloudy":
+            self._draw_sun_icon(draw, left - 3, top - 1)
+            self._draw_cloud_icon(draw, left + 1, top + 3)
+        elif kind == "cloudy":
+            self._draw_cloud_icon(draw, left, top + 2)
+        elif kind == "fog":
+            self._draw_fog_icon(draw, left, top)
+        elif kind == "rain":
+            self._draw_cloud_icon(draw, left, top)
+            self._draw_rain_icon(draw, left + 2, top + 10)
+        elif kind == "thunderstorm":
+            self._draw_cloud_icon(draw, left, top)
+            self._draw_lightning_icon(draw, left + 8, top + 9)
+        elif kind == "snow":
+            self._draw_cloud_icon(draw, left, top)
+            self._draw_snow_icon(draw, left + 3, top + 10)
+        elif kind == "ice":
+            self._draw_ice_icon(draw, left, top)
+        elif kind == "windy":
+            self._draw_wind_icon(draw, left, top)
+        else:
+            self._draw_cloud_icon(draw, left, top + 2)
+
+    def _weather_icon_kind(self) -> str:
+        if self._weather is None:
+            return "cloudy"
+        if self._weather.wind_speed_mph is not None and self._weather.wind_speed_mph >= 25:
+            return "windy"
+        code = self._weather.weather_code
+        if code == 0:
+            return "sun" if self._weather.is_day is not False else "moon"
+        if code == 1:
+            return "sun" if self._weather.is_day is not False else "moon"
+        if code == 2:
+            return "partly_cloudy"
+        if code == 3:
+            return "cloudy"
+        if code in {45, 48}:
+            return "fog"
+        if code in {56, 57, 66, 67, 77}:
+            return "ice"
+        if code in {71, 73, 75, 85, 86}:
+            return "snow"
+        if code in {95, 96, 99}:
+            return "thunderstorm"
+        if code in {51, 53, 55, 61, 63, 65, 80, 81, 82}:
+            return "rain"
+        return "cloudy"
+
+    def _draw_sun_icon(self, draw, left: int, top: int) -> None:
+        center = (left + 8, top + 7)
+        draw.ellipse((center[0] - 4, center[1] - 4, center[0] + 4, center[1] + 4), outline=1)
+        for x1, y1, x2, y2 in (
+            (8, 0, 8, 2),
+            (8, 12, 8, 14),
+            (1, 7, 3, 7),
+            (13, 7, 15, 7),
+            (3, 2, 4, 3),
+            (12, 2, 11, 3),
+            (3, 12, 4, 11),
+            (12, 12, 11, 11),
+        ):
+            draw.line((left + x1, top + y1, left + x2, top + y2), fill=1)
+
+    def _draw_moon_icon(self, draw, left: int, top: int) -> None:
+        draw.ellipse((left + 3, top + 1, left + 14, top + 13), outline=1)
+        draw.ellipse((left + 8, top, left + 17, top + 11), fill=0)
+        draw.point((left + 3, top + 2), fill=1)
+        draw.point((left + 15, top + 13), fill=1)
+
+    def _draw_cloud_icon(self, draw, left: int, top: int) -> None:
+        draw.arc((left + 1, top + 4, left + 9, top + 12), 180, 360, fill=1)
+        draw.arc((left + 6, top + 1, left + 16, top + 11), 180, 360, fill=1)
+        draw.arc((left + 13, top + 5, left + 21, top + 13), 180, 360, fill=1)
+        draw.line((left + 2, top + 10, left + 19, top + 10), fill=1)
+        draw.line((left + 2, top + 11, left + 19, top + 11), fill=1)
+
+    def _draw_fog_icon(self, draw, left: int, top: int) -> None:
+        self._draw_cloud_icon(draw, left, top - 1)
+        for offset in (10, 13, 16):
+            draw.line((left, top + offset, left + 20, top + offset), fill=1)
+
+    def _draw_rain_icon(self, draw, left: int, top: int) -> None:
+        for offset in (0, 6, 12):
+            draw.line((left + offset + 2, top, left + offset, top + 5), fill=1)
+
+    def _draw_lightning_icon(self, draw, left: int, top: int) -> None:
+        draw.line((left + 3, top, left + 1, top + 4), fill=1)
+        draw.line((left + 1, top + 4, left + 5, top + 4), fill=1)
+        draw.line((left + 5, top + 4, left + 2, top + 8), fill=1)
+
+    def _draw_snow_icon(self, draw, left: int, top: int) -> None:
+        for offset in (0, 7, 14):
+            x = left + offset
+            draw.line((x, top + 1, x + 4, top + 5), fill=1)
+            draw.line((x + 4, top + 1, x, top + 5), fill=1)
+            draw.line((x + 2, top, x + 2, top + 6), fill=1)
+
+    def _draw_ice_icon(self, draw, left: int, top: int) -> None:
+        draw.polygon(
+            (
+                (left + 10, top),
+                (left + 18, top + 7),
+                (left + 10, top + 15),
+                (left + 2, top + 7),
+            ),
+            outline=1,
+        )
+        draw.line((left + 10, top, left + 10, top + 15), fill=1)
+        draw.line((left + 2, top + 7, left + 18, top + 7), fill=1)
+
+    def _draw_wind_icon(self, draw, left: int, top: int) -> None:
+        draw.arc((left, top, left + 18, top + 8), 180, 20, fill=1)
+        draw.arc((left + 3, top + 5, left + 20, top + 13), 180, 20, fill=1)
+        draw.line((left, top + 12, left + 12, top + 12), fill=1)
+
     def _format_weather_line(self) -> str:
         if self._weather is None:
             return "Weather unavailable"
 
-        parts: list[str] = []
-        if self._weather.temperature_f is not None:
-            parts.append(f"{round(self._weather.temperature_f)}F")
-        if self._weather.relative_humidity is not None:
-            parts.append(f"{self._weather.relative_humidity}% RH")
-        if self._weather.wind_speed_mph is not None:
-            parts.append(f"Wind {round(self._weather.wind_speed_mph)} mph")
-        return "  ".join(parts) if parts else "Weather unavailable"
+        parts = [self._weather.condition]
+        if self._weather.temperature is not None:
+            parts.append(self._format_temperature(self._weather.temperature))
+        if self._weather.high_temperature is not None:
+            parts.append(f"H{self._format_temperature(self._weather.high_temperature, include_unit=False)}")
+        if self._weather.low_temperature is not None:
+            parts.append(f"L{self._format_temperature(self._weather.low_temperature, include_unit=False)}")
+        return " ".join(parts) if len(parts) > 1 else "Weather unavailable"
+
+    def _format_temperature(self, value: float, include_unit: bool = True) -> str:
+        unit = self._weather.temperature_unit if self._weather and include_unit else ""
+        return f"{round(value)}°{unit}"
 
     def _animate_fact_wipe(self) -> None:
         base_image = self._build_idle_fact_image(self._fact_lines)
@@ -641,12 +785,20 @@ class Ssd1309OledDisplay:
         left, _, right, _ = self._measure_draw.textbbox((0, 0), text, font=font)
         return right - left
 
-    def _load_font(self, size: int):
-        font_paths = (
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-            "/Library/Fonts/Arial.ttf",
-        )
+    def _load_font(self, size: int, prefer_mono: bool = False):
+        if prefer_mono:
+            font_paths = (
+                "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+                "/Library/Fonts/Courier New.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/Library/Fonts/Arial.ttf",
+            )
+        else:
+            font_paths = (
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+                "/Library/Fonts/Arial.ttf",
+            )
         for font_path in font_paths:
             try:
                 return self._font_module.truetype(font_path, size)

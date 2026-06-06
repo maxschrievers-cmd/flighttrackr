@@ -100,6 +100,7 @@ def main() -> None:
             WeatherClient(
                 request_timeout_seconds=location_settings.request_timeout_seconds,
                 refresh_minutes=display_settings.weather_refresh_minutes,
+                temperature_unit=display_settings.weather_temperature_unit,
             )
             if display_settings.weather_enabled and display_settings.idle_mode in {"clock", "mixed"}
             else None
