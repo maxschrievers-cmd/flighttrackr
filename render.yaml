@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: flighttrackr-live
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt -r web_requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT webapp:app
+    autoDeployTrigger: commit
+    envVars:
+      - key: OPENSKY_CLIENT_ID
+        sync: false
+      - key: OPENSKY_CLIENT_SECRET
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.11
