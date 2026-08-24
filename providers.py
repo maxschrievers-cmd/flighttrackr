@@ -82,8 +82,12 @@ class AirplanesLiveProvider:
 
     def get_nearby(self, latitude: float, longitude: float, radius_km: float) -> list[ProviderAircraft]:
         radius_nm = max(1, min(250, math.ceil(radius_km / 1.852)))
-        base_url = os.getenv("AIRPLANES_LIVE_API_BASE", "https://api.adsb.one")
-        response = requests.get(f"{base_url}/v2/point/{latitude}/{longitude}/{radius_nm}", timeout=8)
+        base_url = os.getenv("AIRPLANES_LIVE_API_BASE", "https://api.airplanes.live").rstrip("/")
+        response = requests.get(
+            f"{base_url}/v2/point/{latitude}/{longitude}/{radius_nm}",
+            timeout=(3, 8),
+            headers={"User-Agent": "FlightTrackr/1.0"},
+        )
         response.raise_for_status()
         now = time.time()
         aircraft: list[ProviderAircraft] = []
@@ -116,7 +120,8 @@ class OpenSkyProvider:
         self.client = OpenSkyClient(
             client_id=os.getenv("OPENSKY_CLIENT_ID", ""), client_secret=os.getenv("OPENSKY_CLIENT_SECRET", ""),
             min_request_interval_seconds=int(os.getenv("OPENSKY_MIN_REQUEST_INTERVAL", "10")),
-            request_timeout_seconds=int(os.getenv("OPENSKY_REQUEST_TIMEOUT", "10")),
+            auth_timeout_seconds=int(os.getenv("OPENSKY_AUTH_TIMEOUT", "3")),
+            request_timeout_seconds=int(os.getenv("OPENSKY_REQUEST_TIMEOUT", "5")),
         )
 
     def get_nearby(self, latitude: float, longitude: float, radius_km: float) -> list[ProviderAircraft]:
