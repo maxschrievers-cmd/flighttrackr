@@ -1,4 +1,3 @@
-import os
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -9,6 +8,8 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from providers import lookup_flight, provider_status
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -23,16 +24,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(self), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = "geolocation=(self), microphone=(), camera=(), notifications=(self)"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' https://unpkg.com https://cdn.sheetjs.com; "
-            "style-src 'self' https://unpkg.com; "
-            "img-src 'self' data: https://*.tile.openstreetmap.org; "
-            "connect-src 'self' https://api.adsb.lol https://cdn.sheetjs.com; "
-            "font-src 'self' https://unpkg.com; "
+            "default-src 'self'; script-src 'self' https://unpkg.com https://cdn.sheetjs.com; "
+            "style-src 'self' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org; "
+            "connect-src 'self' https://api.adsb.lol https://cdn.sheetjs.com; font-src 'self' https://unpkg.com; "
             "worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         )
         return response
@@ -53,6 +51,22 @@ def _rate_check(request: Request) -> None:
 
 @app.get("/healthz")
 async def healthz(): return {"status":"ok","service":"flighttrackr"}
+
+@app.get("/api/providers")
+async def providers(request: Request):
+    _rate_check(request)
+    return provider_status()
+
+@app.get("/api/flight-status")
+async def flight_status(request: Request, flight_number: str = Query(..., min_length=2, max_length=12), date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    _rate_check(request)
+    clean = "".join(flight_number.upper().split())
+    if not clean.isalnum():
+        raise HTTPException(status_code=400, detail="Invalid flight number.")
+    result = await lookup_flight(clean, date)
+    if not result:
+        raise HTTPException(status_code=404, detail="No configured provider returned flight status data.")
+    return result.as_dict()
 
 @app.get("/api/nearby")
 async def nearby(request: Request, lat: float=Query(...,ge=-90,le=90), lon: float=Query(...,ge=-180,le=180), radius: float=Query(25,gt=0,le=MAX_RADIUS_NM)):
