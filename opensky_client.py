@@ -1,12 +1,12 @@
 import logging
 import math
+import random
 import time
 from collections.abc import Callable
 
 import requests
 
 from models import FlightState
-
 
 logger = logging.getLogger(__name__)
 
@@ -24,26 +24,46 @@ class OpenSkyClient:
         self.access_token: str | None = None
         self.token_expires_at = 0.0
         self.last_request_time = 0.0
+        self.auth_backoff_until = 0.0
         self.session = requests.Session()
         self.status_callback = status_callback
 
     def get_access_token(self) -> str | None:
-        if self.access_token and time.time() < self.token_expires_at - self.token_refresh_buffer_seconds:
+        now = time.time()
+        if self.access_token and now < self.token_expires_at - self.token_refresh_buffer_seconds:
             return self.access_token
+        if now < self.auth_backoff_until:
+            logger.warning("OpenSky auth temporarily backed off for %.0fs", self.auth_backoff_until - now)
+            return None
         if not self.client_id or not self.client_secret:
             logger.warning("OpenSky credentials are not configured")
             return None
-        try:
-            response = self.session.post("https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token", data={"client_id": self.client_id, "client_secret": self.client_secret, "grant_type": "client_credentials"}, timeout=self.auth_timeout_seconds)
-            response.raise_for_status()
-            token_data = response.json()
-        except requests.exceptions.RequestException as exc:
-            logger.error("Error getting access token: %s", exc)
-            self._notify_request_status(exc, "OpenSky Error", "Auth failed")
-            return None
-        self.access_token = token_data.get("access_token")
-        self.token_expires_at = time.time() + token_data.get("expires_in", 3600)
-        return self.access_token
+        for attempt in range(3):
+            try:
+                response = self.session.post(
+                    "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
+                    data={"client_id": self.client_id, "client_secret": self.client_secret, "grant_type": "client_credentials"},
+                    timeout=self.auth_timeout_seconds,
+                )
+                response.raise_for_status()
+                token_data = response.json()
+                token = token_data.get("access_token")
+                if not token:
+                    raise requests.exceptions.RequestException("OpenSky auth response contained no access token")
+                self.access_token = token
+                self.token_expires_at = time.time() + float(token_data.get("expires_in", 3600))
+                self.auth_backoff_until = 0.0
+                return self.access_token
+            except requests.exceptions.RequestException as exc:
+                if attempt == 2:
+                    self.auth_backoff_until = time.time() + min(300, self.rate_limit_backoff_seconds)
+                    logger.error("OpenSky token acquisition failed after retries: %s", exc)
+                    self._notify_request_status(exc, "OpenSky Error", "Auth failed")
+                    return None
+                delay = min(8, 2 ** attempt) + random.uniform(0, 0.5)
+                logger.warning("OpenSky auth attempt %s failed; retrying in %.1fs", attempt + 1, delay)
+                time.sleep(delay)
+        return None
 
     def get_nearby_flights(self, latitude: float, longitude: float, radius_miles: int) -> list[FlightState]:
         token = self.get_access_token()
