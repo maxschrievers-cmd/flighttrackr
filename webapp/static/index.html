@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#081018">
+  <meta name="description" content="Kostenloser, Open-Source Flight Tracker und persönliches Flugbuch.">
+  <title>FlightTrackr</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3I1hN8RJXv1QvKpJ7YJ2qY9w9gKpM=" crossorigin="anonymous">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">OPEN SOURCE · FREE · LOCAL FIRST</span>
+      <h1>FlightTrackr</h1>
+    </div>
+    <div class="toolbar">
+      <button id="locateBtn" class="button primary">Standort</button>
+      <button id="refreshBtn" class="button">Live aktualisieren</button>
+      <button id="addFlightBtn" class="button">Flug eintragen</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="status" id="status">Bereit · noch kein Standort gesetzt</div>
+        <h2>Dein persönliches Flugbuch + Live-Himmel.</h2>
+        <p class="lead">Flüge bleiben auf diesem Gerät. Live-Flugdaten werden nur für die aktuelle Anzeige abgefragt.</p>
+      </div>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="grid two">
+      <article class="card map-card">
+        <div class="card-head"><div><span class="eyebrow">LIVE</span><h3>Flugzeuge in deiner Nähe</h3></div><span id="aircraftCount" class="pill">0</span></div>
+        <div id="map" class="map" aria-label="Karte mit Flugzeugen"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head"><div><span class="eyebrow">ÜBERBLICK</span><h3>Dein Flugprofil</h3></div></div>
+        <div class="profile" id="profile"></div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div><span class="eyebrow">FLUGBUCH</span><h3>Meine Flüge</h3></div><div class="inline-actions"><button id="exportBtn" class="button">Export</button><label class="button file-button">Import<input id="importInput" type="file" accept="application/json"></label></div></div>
+      <div id="flights" class="flights empty">Noch keine Flüge eingetragen.</div>
+    </section>
+  </main>
+
+  <dialog id="flightDialog">
+    <form method="dialog" id="flightForm" class="dialog-form">
+      <div class="card-head"><div><span class="eyebrow">NEUER EINTRAG</span><h3>Flug hinzufügen</h3></div><button value="cancel" class="icon-button" aria-label="Schließen">×</button></div>
+      <label>Datum<input name="date" type="date" required></label>
+      <div class="form-grid"><label>Flugnummer<input name="flightNumber" placeholder="OS123" required maxlength="12"></label><label>Airline<input name="airline" placeholder="Austrian" maxlength="60"></label></div>
+      <div class="form-grid"><label>Von<input name="from" placeholder="VIE" required maxlength="4"></label><label>Nach<input name="to" placeholder="FRA" required maxlength="4"></label></div>
+      <div class="form-grid"><label>Flugzeug<input name="aircraft" placeholder="A320" maxlength="30"></label><label>Klasse<select name="cabin"><option>Economy</option><option>Premium Economy</option><option>Business</option><option>First</option></select></label></div>
+      <label>Notiz<textarea name="note" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
+      <div class="dialog-actions"><button value="cancel" class="button">Abbrechen</button><button value="default" class="button primary">Speichern</button></div>
+    </form>
+  </dialog>
+
+  <footer>FlightTrackr · Datenquelle Live-Tracking: ADSB.lol · persönliche Flugdaten bleiben lokal</footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qijJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>
