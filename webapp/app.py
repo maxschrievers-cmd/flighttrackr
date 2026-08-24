@@ -9,9 +9,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from providers import lookup_flight, provider_status
-from push import VAPID_PUBLIC_KEY, configured as push_configured, is_gone, send as send_push
-from push_store import all_subscriptions, remove, upsert
+from .providers import lookup_flight, provider_status
+from .push import VAPID_PUBLIC_KEY, configured as push_configured, is_gone, send as send_push
+from .push_store import all_subscriptions, remove, upsert
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
