@@ -12,6 +12,7 @@ from opensky_client import OpenSkyClient
 
 EARTH_RADIUS_KM = 6371.0088
 FRESH_POSITION_SECONDS = 15
+AGING_POSITION_SECONDS = 60
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -33,6 +34,12 @@ class ProviderAircraft:
     vertical_rate_ms: float | None
     squawk: str | None
     source: str
+    registration: str | None = None
+    aircraft_type: str | None = None
+    aircraft_description: str | None = None
+    operator: str | None = None
+    origin: str | None = None
+    destination: str | None = None
     position_timestamp: float | None = None
     last_contact_timestamp: float | None = None
     received_at: float = field(default_factory=time.time)
@@ -41,15 +48,33 @@ class ProviderAircraft:
         reference = self.position_timestamp or self.last_contact_timestamp or self.received_at
         return max(0.0, (now or time.time()) - reference)
 
-    def quality_score(self, now: float | None = None) -> tuple:
+    @property
+    def position_age_seconds(self) -> int:
+        return round(self.age_seconds())
+
+    @property
+    def freshness(self) -> str:
+        age = self.age_seconds()
+        if age <= FRESH_POSITION_SECONDS:
+            return "fresh"
+        if age <= AGING_POSITION_SECONDS:
+            return "aging"
+        return "stale"
+
+    def quality_tuple(self, now: float | None = None) -> tuple:
         age = self.age_seconds(now)
         freshness = max(0.0, 100.0 - age * 5.0)
         completeness = sum(value is not None for value in (
-            self.callsign, self.altitude_m, self.velocity_kmh,
-            self.heading_deg, self.vertical_rate_ms, self.squawk,
+            self.callsign, self.altitude_m, self.velocity_kmh, self.heading_deg,
+            self.vertical_rate_ms, self.squawk, self.registration, self.aircraft_type,
         ))
         source_rank = {"airplanes.live": 2, "opensky": 1}.get(self.source, 0)
         return (freshness, completeness, source_rank)
+
+    @property
+    def quality_score(self) -> int:
+        freshness, completeness, _ = self.quality_tuple()
+        return min(100, round(freshness * 0.75 + completeness / 8 * 25))
 
 
 class AirplanesLiveProvider:
@@ -67,16 +92,19 @@ class AirplanesLiveProvider:
             if lat is None or lon is None or haversine_km(latitude, longitude, lat, lon) > radius_km:
                 continue
             alt_ft = item.get("alt_baro")
+            seen_pos = item.get("seen_pos")
+            position_timestamp = now - float(seen_pos) if isinstance(seen_pos, (int, float)) and seen_pos >= 0 else None
             aircraft.append(ProviderAircraft(
                 icao24=item.get("hex"), callsign=(item.get("flight") or "").strip() or None,
                 latitude=lat, longitude=lon,
                 altitude_m=float(alt_ft) * 0.3048 if isinstance(alt_ft, (int, float)) else None,
                 velocity_kmh=float(item["gs"]) * 1.852 if isinstance(item.get("gs"), (int, float)) else None,
-                heading_deg=item.get("track"), vertical_rate_ms=(float(item["baro_rate"]) * 0.00508 if isinstance(item.get("baro_rate"), (int, float)) else None),
+                heading_deg=item.get("track"),
+                vertical_rate_ms=float(item["baro_rate"]) * 0.00508 if isinstance(item.get("baro_rate"), (int, float)) else None,
                 squawk=item.get("squawk"), source=self.name,
-                position_timestamp=float(item["seen_pos"]) if isinstance(item.get("seen_pos"), (int, float)) and item["seen_pos"] > 1000000000 else None,
-                last_contact_timestamp=None,
-                received_at=now,
+                registration=item.get("r"), aircraft_type=item.get("t"), aircraft_description=item.get("desc"),
+                operator=item.get("own"), origin=item.get("orig"), destination=item.get("dest"),
+                position_timestamp=position_timestamp, received_at=now,
             ))
         return aircraft
 
@@ -122,11 +150,10 @@ class ProviderManager:
                 continue
             except Exception:
                 continue
-
         now = time.time()
         selected: list[ProviderAircraft] = []
         for aircraft_group in candidates.values():
             fresh = [aircraft for aircraft in aircraft_group if aircraft.age_seconds(now) <= FRESH_POSITION_SECONDS]
             pool = fresh or aircraft_group
-            selected.append(max(pool, key=lambda aircraft: aircraft.quality_score(now)))
+            selected.append(max(pool, key=lambda aircraft: aircraft.quality_tuple(now)))
         return selected
