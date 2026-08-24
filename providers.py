@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 import os
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import requests
@@ -10,6 +11,7 @@ import requests
 from opensky_client import OpenSkyClient
 
 EARTH_RADIUS_KM = 6371.0088
+FRESH_POSITION_SECONDS = 15
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -31,6 +33,23 @@ class ProviderAircraft:
     vertical_rate_ms: float | None
     squawk: str | None
     source: str
+    position_timestamp: float | None = None
+    last_contact_timestamp: float | None = None
+    received_at: float = field(default_factory=time.time)
+
+    def age_seconds(self, now: float | None = None) -> float:
+        reference = self.position_timestamp or self.last_contact_timestamp or self.received_at
+        return max(0.0, (now or time.time()) - reference)
+
+    def quality_score(self, now: float | None = None) -> tuple:
+        age = self.age_seconds(now)
+        freshness = max(0.0, 100.0 - age * 5.0)
+        completeness = sum(value is not None for value in (
+            self.callsign, self.altitude_m, self.velocity_kmh,
+            self.heading_deg, self.vertical_rate_ms, self.squawk,
+        ))
+        source_rank = {"airplanes.live": 2, "opensky": 1}.get(self.source, 0)
+        return (freshness, completeness, source_rank)
 
 
 class AirplanesLiveProvider:
@@ -41,12 +60,11 @@ class AirplanesLiveProvider:
         base_url = os.getenv("AIRPLANES_LIVE_API_BASE", "https://api.adsb.one")
         response = requests.get(f"{base_url}/v2/point/{latitude}/{longitude}/{radius_nm}", timeout=8)
         response.raise_for_status()
+        now = time.time()
         aircraft: list[ProviderAircraft] = []
         for item in response.json().get("ac", []):
             lat, lon = item.get("lat"), item.get("lon")
-            if lat is None or lon is None:
-                continue
-            if haversine_km(latitude, longitude, lat, lon) > radius_km:
+            if lat is None or lon is None or haversine_km(latitude, longitude, lat, lon) > radius_km:
                 continue
             alt_ft = item.get("alt_baro")
             aircraft.append(ProviderAircraft(
@@ -56,6 +74,9 @@ class AirplanesLiveProvider:
                 velocity_kmh=float(item["gs"]) * 1.852 if isinstance(item.get("gs"), (int, float)) else None,
                 heading_deg=item.get("track"), vertical_rate_ms=(float(item["baro_rate"]) * 0.00508 if isinstance(item.get("baro_rate"), (int, float)) else None),
                 squawk=item.get("squawk"), source=self.name,
+                position_timestamp=float(item["seen_pos"]) if isinstance(item.get("seen_pos"), (int, float)) and item["seen_pos"] > 1000000000 else None,
+                last_contact_timestamp=None,
+                received_at=now,
             ))
         return aircraft
 
@@ -65,8 +86,7 @@ class OpenSkyProvider:
 
     def __init__(self) -> None:
         self.client = OpenSkyClient(
-            client_id=os.getenv("OPENSKY_CLIENT_ID", ""),
-            client_secret=os.getenv("OPENSKY_CLIENT_SECRET", ""),
+            client_id=os.getenv("OPENSKY_CLIENT_ID", ""), client_secret=os.getenv("OPENSKY_CLIENT_SECRET", ""),
             min_request_interval_seconds=int(os.getenv("OPENSKY_MIN_REQUEST_INTERVAL", "10")),
             request_timeout_seconds=int(os.getenv("OPENSKY_REQUEST_TIMEOUT", "10")),
         )
@@ -75,16 +95,14 @@ class OpenSkyProvider:
         radius_miles = max(1, math.ceil(radius_km / 1.609344))
         result: list[ProviderAircraft] = []
         for flight in self.client.get_nearby_flights(latitude, longitude, radius_miles):
-            if flight.latitude is None or flight.longitude is None:
-                continue
-            if haversine_km(latitude, longitude, flight.latitude, flight.longitude) > radius_km:
+            if flight.latitude is None or flight.longitude is None or haversine_km(latitude, longitude, flight.latitude, flight.longitude) > radius_km:
                 continue
             result.append(ProviderAircraft(
                 icao24=flight.icao24, callsign=flight.callsign, latitude=flight.latitude, longitude=flight.longitude,
-                altitude_m=flight.altitude_m,
-                velocity_kmh=flight.velocity_ms * 3.6 if flight.velocity_ms is not None else None,
-                heading_deg=flight.heading_deg, vertical_rate_ms=flight.vertical_rate_ms,
-                squawk=flight.squawk, source=self.name,
+                altitude_m=flight.altitude_m, velocity_kmh=flight.velocity_ms * 3.6 if flight.velocity_ms is not None else None,
+                heading_deg=flight.heading_deg, vertical_rate_ms=flight.vertical_rate_ms, squawk=flight.squawk,
+                source=self.name, position_timestamp=getattr(flight, "time_position", None),
+                last_contact_timestamp=getattr(flight, "last_contact", None),
             ))
         return result
 
@@ -94,15 +112,21 @@ class ProviderManager:
         self.providers = [AirplanesLiveProvider(), OpenSkyProvider()]
 
     def get_nearby(self, latitude: float, longitude: float, radius_km: float) -> list[ProviderAircraft]:
-        merged: dict[str, ProviderAircraft] = {}
+        candidates: dict[str, list[ProviderAircraft]] = {}
         for provider in self.providers:
             try:
                 for aircraft in provider.get_nearby(latitude, longitude, radius_km):
                     key = (aircraft.icao24 or f"{aircraft.callsign}:{aircraft.latitude:.4f}:{aircraft.longitude:.4f}").lower()
-                    if key not in merged:
-                        merged[key] = aircraft
+                    candidates.setdefault(key, []).append(aircraft)
             except requests.RequestException:
                 continue
             except Exception:
                 continue
-        return list(merged.values())
+
+        now = time.time()
+        selected: list[ProviderAircraft] = []
+        for aircraft_group in candidates.values():
+            fresh = [aircraft for aircraft in aircraft_group if aircraft.age_seconds(now) <= FRESH_POSITION_SECONDS]
+            pool = fresh or aircraft_group
+            selected.append(max(pool, key=lambda aircraft: aircraft.quality_score(now)))
+        return selected
