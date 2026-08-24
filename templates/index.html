@@ -6,55 +6,28 @@
   <meta name="theme-color" content="#0b1020">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <title>FlightTrackr Live</title>
 </head>
 <body>
   <main class="app-shell">
     <header>
-      <div>
-        <p class="eyebrow">LIVE AIRSPACE</p>
-        <h1>FlightTrackr</h1>
-      </div>
+      <div><p class="eyebrow">LIVE AIRSPACE</p><h1>FlightTrackr</h1></div>
       <button id="locationButton">Standort aktivieren</button>
     </header>
-
     <section class="hero">
-      <div class="radar" id="radar"><span id="radarCount">–</span><small>Flugzeuge</small></div>
-      <div>
-        <h2>5 km um dich</h2>
-        <p id="status">Warte auf deinen Live-Standort …</p>
-      </div>
+      <div class="radar"><span id="radarCount">–</span><small>Flugzeuge</small></div>
+      <div><h2>Live um dich</h2><p id="status">Warte auf deinen Live-Standort …</p></div>
     </section>
-
+    <section id="map" class="map-card" aria-label="Live-Flugkarte"></section>
     <section class="controls">
-      <label>Radius
-        <select id="radius">
-          <option value="2">2 km</option>
-          <option value="5" selected>5 km</option>
-          <option value="10">10 km</option>
-          <option value="25">25 km</option>
-        </select>
-      </label>
-      <label>Aktualisierung
-        <select id="interval">
-          <option value="10">10 Sekunden</option>
-          <option value="20" selected>20 Sekunden</option>
-          <option value="30">30 Sekunden</option>
-          <option value="60">60 Sekunden</option>
-        </select>
-      </label>
+      <label>Radius<select id="radius"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select></label>
+      <label>Aktualisierung<select id="interval"><option value="10">10 Sekunden</option><option value="20" selected>20 Sekunden</option><option value="30">30 Sekunden</option><option value="60">60 Sekunden</option></select></label>
     </section>
-
-    <section class="location-card" id="locationCard" hidden>
-      <strong>Dein Standort</strong>
-      <span id="coordinates"></span>
-    </section>
-
-    <section>
-      <div class="section-heading"><h2>Flugzeuge im Radius</h2><span id="updatedAt">–</span></div>
-      <div id="flightList" class="flight-list"></div>
-    </section>
+    <section class="location-card" id="locationCard" hidden><strong>Dein Standort</strong><span id="coordinates"></span></section>
+    <section><div class="section-heading"><h2>Flugzeuge im Radius</h2><span id="updatedAt">–</span></div><div id="flightList" class="flight-list"></div></section>
   </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
