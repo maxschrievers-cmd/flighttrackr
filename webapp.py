@@ -64,6 +64,9 @@ def flights() -> Any:
             "velocity_kmh": round(flight.velocity_kmh) if flight.velocity_kmh is not None else None,
             "heading_deg": flight.heading_deg, "vertical_rate_ms": flight.vertical_rate_ms,
             "squawk": flight.squawk, "source": flight.source,
+            "position_age_seconds": flight.position_age_seconds,
+            "freshness": flight.freshness,
+            "quality_score": flight.quality_score,
         })
     aircraft.sort(key=lambda item: item["distance_km"])
     return jsonify({"center": {"latitude": latitude, "longitude": longitude}, "radius_km": radius_km, "count": len(aircraft), "aircraft": aircraft})
