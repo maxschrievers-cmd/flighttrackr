@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import requests
@@ -13,6 +13,7 @@ from opensky_client import OpenSkyClient
 EARTH_RADIUS_KM = 6371.0088
 FRESH_POSITION_SECONDS = 15
 AGING_POSITION_SECONDS = 60
+OPERATOR_CACHE_TTL_SECONDS = 86400
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -60,14 +61,14 @@ class ProviderAircraft:
     def quality_tuple(self, now: float | None = None) -> tuple:
         age = self.age_seconds(now)
         freshness = max(0.0, 100.0 - age * 5.0)
-        completeness = sum(value is not None for value in (self.callsign, self.altitude_m, self.velocity_kmh, self.heading_deg, self.vertical_rate_ms, self.squawk, self.registration, self.aircraft_type))
+        completeness = sum(value is not None for value in (self.callsign, self.altitude_m, self.velocity_kmh, self.heading_deg, self.vertical_rate_ms, self.squawk, self.registration, self.aircraft_type, self.operator))
         source_rank = {"airplanes.live": 3, "adsb.lol": 2, "opensky": 1}.get(self.source, 0)
         return (freshness, completeness, source_rank)
 
     @property
     def quality_score(self) -> int:
         freshness, completeness, _ = self.quality_tuple()
-        return min(100, round(freshness * 0.75 + completeness / 8 * 25))
+        return min(100, round(freshness * 0.75 + completeness / 9 * 25))
 
 
 class CompatiblePointProvider:
@@ -80,7 +81,7 @@ class CompatiblePointProvider:
         radius_nm = max(1, min(250, math.ceil(radius_km / 1.852)))
         url = f"{self.base_url}/v2/point/{latitude:.6f}/{longitude:.6f}/{radius_nm}"
         try:
-            response = requests.get(url, timeout=(3, 8), headers={"User-Agent": "FlightTrackr/1.1", "Accept": "application/json"})
+            response = requests.get(url, timeout=(3, 8), headers={"User-Agent": "FlightTrackr/1.2", "Accept": "application/json"})
             response.raise_for_status()
             payload = response.json()
             self.last_error = None
@@ -105,7 +106,7 @@ class CompatiblePointProvider:
                 velocity_kmh=float(item["gs"]) * 1.852 if isinstance(item.get("gs"), (int, float)) else None,
                 heading_deg=item.get("track"), vertical_rate_ms=float(item["baro_rate"]) * 0.00508 if isinstance(item.get("baro_rate"), (int, float)) else None,
                 squawk=item.get("squawk"), source=self.name, registration=item.get("r"), aircraft_type=item.get("t"),
-                aircraft_description=item.get("desc"), operator=item.get("own"), origin=item.get("orig"), destination=item.get("dest"),
+                aircraft_description=item.get("desc"), operator=item.get("own") or item.get("owner"), origin=item.get("orig"), destination=item.get("dest"),
                 position_timestamp=position_timestamp, received_at=now,
             ))
         return result
@@ -126,6 +127,37 @@ class OpenSkyProvider:
         return result
 
 
+class OperatorResolver:
+    def __init__(self) -> None:
+        self.cache: dict[str, tuple[float, dict[str, str | None]]] = {}
+        self.session = requests.Session()
+
+    def resolve(self, flight: ProviderAircraft) -> dict[str, str | None]:
+        key = (flight.icao24 or flight.registration or flight.callsign or "").lower()
+        if not key:
+            return {}
+        cached = self.cache.get(key)
+        if cached and time.time() - cached[0] < OPERATOR_CACHE_TTL_SECONDS:
+            return cached[1]
+        result = {"operator": None, "registration": None, "aircraft_type": None, "aircraft_description": None}
+        if flight.icao24:
+            try:
+                response = self.session.get(f"https://api.airplanes.live/v2/hex/{flight.icao24.lower()}", timeout=(2, 4), headers={"User-Agent": "FlightTrackr/1.2", "Accept": "application/json"})
+                response.raise_for_status()
+                payload = response.json()
+                aircraft = (payload.get("ac") or [{}])[0]
+                result.update({
+                    "operator": aircraft.get("own") or aircraft.get("owner"),
+                    "registration": aircraft.get("r"),
+                    "aircraft_type": aircraft.get("t"),
+                    "aircraft_description": aircraft.get("desc"),
+                })
+            except (requests.RequestException, ValueError, IndexError, TypeError):
+                pass
+        self.cache[key] = (time.time(), result)
+        return result
+
+
 class ProviderManager:
     def __init__(self) -> None:
         self.providers = [
@@ -133,6 +165,7 @@ class ProviderManager:
             CompatiblePointProvider("adsb.lol", os.getenv("ADSB_LOL_API_BASE", "https://api.adsb.lol")),
             OpenSkyProvider(),
         ]
+        self.operator_resolver = OperatorResolver()
         self.last_provider_status: dict[str, Any] = {}
 
     def get_nearby(self, latitude: float, longitude: float, radius_km: float) -> list[ProviderAircraft]:
@@ -152,5 +185,15 @@ class ProviderManager:
         selected: list[ProviderAircraft] = []
         for group in candidates.values():
             fresh = [item for item in group if item.age_seconds(now) <= FRESH_POSITION_SECONDS]
-            selected.append(max(fresh or group, key=lambda item: item.quality_tuple(now)))
+            best = max(fresh or group, key=lambda item: item.quality_tuple(now))
+            metadata = self.operator_resolver.resolve(best)
+            if metadata:
+                best = replace(
+                    best,
+                    operator=best.operator or metadata.get("operator"),
+                    registration=best.registration or metadata.get("registration"),
+                    aircraft_type=best.aircraft_type or metadata.get("aircraft_type"),
+                    aircraft_description=best.aircraft_description or metadata.get("aircraft_description"),
+                )
+            selected.append(best)
         return selected
