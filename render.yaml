@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: flighttrackr
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: "python -m compileall server.py && true"
+    startCommand: "python server.py"
+    autoDeploy: true

@@ -1,28 +1,21 @@
-FlightTrackr Non-Commercial License
+MIT License
 
-Copyright (c) 2026 A.J. Harnak
+Copyright (c) 2026 Max Schrievers
 
-Permission is granted to use, copy, modify, and share this software and its
-source code for personal, hobbyist, educational, and other non-commercial
-purposes, subject to the conditions below.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-You may not use this software, or any modified version of it, for commercial
-purposes without prior written permission from the copyright holder.
-Commercial purposes include, but are not limited to:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-- selling the software
-- bundling it into a paid product or service
-- offering paid hosted access
-- using it internally for a revenue-generating business offering
-- reselling support, consulting, or installation services centered on this software
-
-If you redistribute this software or a modified version, you must keep this
-license notice and clearly note that changes were made.
-
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
-AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
-OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.

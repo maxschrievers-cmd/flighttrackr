@@ -1,25 +1,7 @@
-__pycache__/
-*.pyc
-.venv/
-venv/
-env/
-.DS_Store
-
-# data / generated stuff
-*.log
-*.sqlite
-*.db
-price_data.json
-flightaware_usage.json
-airportdb_seen_airports.json
-
-# config (we'll clean this up later if needed)
-config.toml
+node_modules/
 .env
-
-# editor junk
-.vscode/
-.idea/
-
-# playwright browsers
-playwright/.local-browsers/
+.env.*
+.DS_Store
+private/
+data/max-initial-flights.json
+data/private-seed.json

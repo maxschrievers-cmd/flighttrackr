@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#071f41" />
+  <meta name="description" content="FlightTrackr – dein persönlicher Open-Source-Flugpass." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <header class="brand">
+        <div class="eyebrow">MILES • MEMORIES • MOMENTUM</div>
+        <h1>PERSÖNLICHER FLUGPASS</h1>
+        <div class="profile-line">Passagier <strong id="profileName">MAX SCHRIEVERS</strong> · Persönlicher Bereich</div>
+      </header>
+      <section class="stats-grid" id="statsGrid"></section>
+      <div class="action-row">
+        <button class="btn btn-primary" data-action="open-import">＋ FLÜGE IMPORTIEREN</button>
+        <button class="btn btn-gold" data-action="export-flightpass">⇩ FLUGKARTE EXPORTIEREN</button>
+      </div>
+      <div class="toolbar-row"><button class="toolbar-btn" data-action="open-settings">KONTO & EINSTELLUNGEN</button><span id="storageStatus" class="sync-status">LOKAL GESPEICHERT</span></div>
+      <section class="side-section"><div class="section-heading">WEITERE AUSWERTUNGEN <span>＋</span></div><div class="quick-links"><button data-action="show-analytics">Umwelt</button><button data-action="show-analytics">Zeitraum</button><button data-action="show-analytics">Reiseprofil</button><button data-action="show-analytics">Betrieb</button></div></section>
+      <section class="side-section journal-section">
+        <div class="section-heading">FLUGJOURNAL <span id="journalCountLabel">0 Flüge</span></div>
+        <div class="search-row"><input id="searchInput" type="search" placeholder="Flüge durchsuchen …" /><select id="yearFilter"><option value="all">Alle Jahre</option></select><select id="sortSelect"><option value="newest">Neueste zuerst</option><option value="oldest">Älteste zuerst</option></select></div>
+        <div class="mini-stats" id="miniStats"></div><div class="journal-list" id="journalList"></div>
+      </section>
+    </aside>
+    <main class="main-area">
+      <div class="map-topbar"><button class="route-btn active" data-action="show-map-all">✦ GESAMTE ROUTE</button><div class="flag-cloud" id="countryChips"></div><div class="map-zoom"><button data-action="zoom-in">+</button><button data-action="zoom-out">−</button></div></div>
+      <div id="map"></div>
+      <div class="map-bottom-fab"><button class="floating-action" data-action="open-scanner">▣ FLUGTICKET SCANNEN</button><button class="floating-action light" data-action="open-flight-form">＋ FLUG ANLEGEN</button></div>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="modalBackdrop" hidden></div><section class="modal" id="modal" hidden aria-modal="true" role="dialog"></section>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

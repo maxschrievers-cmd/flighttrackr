@@ -1,0 +1,7 @@
+[
+  {"date":"2026-07-14","origin":"VIE","destination":"FRA","airline":"Demo Air","airlineCode":"DA","flightNumber":"DA101","aircraft":"Airbus A320neo","registration":"DEMO-01","cabin":"economy","status":"flown","dataQuality":"verified","source":"demo"},
+  {"date":"2026-07-18","origin":"FRA","destination":"JFK","airline":"Demo Air","airlineCode":"DA","flightNumber":"DA202","aircraft":"Airbus A330-900","registration":"DEMO-02","cabin":"business","status":"flown","dataQuality":"verified","source":"demo"},
+  {"date":"2026-07-27","origin":"JFK","destination":"VIE","airline":"Demo Air","airlineCode":"DA","flightNumber":"DA203","aircraft":"Airbus A330-900","registration":"DEMO-03","cabin":"business","status":"flown","dataQuality":"verified","source":"demo"},
+  {"date":"2026-08-03","origin":"VIE","destination":"BKK","airline":"Demo Air","airlineCode":"DA","flightNumber":"DA404","aircraft":"Boeing 787-9","registration":"DEMO-04","cabin":"economy","status":"flown","dataQuality":"verified","source":"demo"},
+  {"date":"2026-08-12","origin":"BKK","destination":"VIE","airline":"Demo Air","airlineCode":"DA","flightNumber":"DA405","aircraft":"Boeing 787-9","registration":"DEMO-05","cabin":"economy","status":"flown","dataQuality":"verified","source":"demo"}
+]
