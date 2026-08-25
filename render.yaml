@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: flighttrackr
+    runtime: python
+    region: frankfurt
+    plan: free
+    branch: main
+    buildCommand: pip install -r webapp/requirements.txt
+    startCommand: uvicorn webapp.app:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
