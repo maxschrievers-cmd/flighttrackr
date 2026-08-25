@@ -20,11 +20,12 @@
       <section class="stats-grid" id="statsGrid"></section>
       <div class="action-row">
         <button class="btn btn-primary" data-action="open-import">＋ FLÜGE IMPORTIEREN</button>
-        <button class="btn btn-gold" data-action="export-flightpass">⇩ FLUGKARTE EXPORTIEREN</button>
+        <button class="btn btn-gold" data-action="export-flightpass">⇩ FLUGPASS EXPORTIEREN</button>
       </div>
       <div class="toolbar-row"><button class="toolbar-btn" data-action="open-settings">KONTO & EINSTELLUNGEN</button><span id="storageStatus" class="sync-status">LOKAL GESPEICHERT</span></div>
       <div class="action-row" style="padding-top:0"><button class="btn btn-secondary" data-action="create-trip">＋ REISE ERSTELLEN</button><button class="btn btn-secondary" data-action="export-trips">⇩ REISEN JSON</button></div>
       <div class="quick-links" style="padding-top:0"><button data-action="export-json">JSON</button><button data-action="export-csv">CSV</button><button data-action="export-xlsx">EXCEL</button><button data-action="show-analytics">STATISTIK</button></div>
+      <div class="quick-links" style="padding-top:0"><button data-action="enable-notifications">BENACHRICHTIGUNGEN</button><button data-action="toggle-live-radar">LIVE RADAR</button><span id="liveRadarStatus" class="sync-status">LIVE · pausiert</span></div>
       <section class="side-section"><div class="section-heading">WEITERE AUSWERTUNGEN <span>＋</span></div><div class="quick-links"><button data-action="show-analytics">Umwelt</button><button data-action="show-analytics">Zeitraum</button><button data-action="show-analytics">Reiseprofil</button><button data-action="show-analytics">Betrieb</button></div></section>
       <section class="side-section journal-section">
         <div class="section-heading">FLUGJOURNAL <span id="journalCountLabel">0 Flüge</span></div>
@@ -44,5 +45,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
   <script src="extras.js"></script>
+  <script src="live.js"></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>
 </body>
 </html>
