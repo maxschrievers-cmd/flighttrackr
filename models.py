@@ -10,6 +10,9 @@ class FlightState:
     heading_deg: float | None
     vertical_rate_ms: float | None
     squawk: str | None
+    icao24: str | None = None
+    longitude: float | None = None
+    latitude: float | None = None
 
     @classmethod
     def from_api_state(cls, state: list) -> "FlightState | None":
@@ -24,6 +27,9 @@ class FlightState:
             heading_deg=state[10],
             vertical_rate_ms=state[11],
             squawk=state[14],
+            icao24=state[0],
+            longitude=state[5],
+            latitude=state[6],
         )
 
 
