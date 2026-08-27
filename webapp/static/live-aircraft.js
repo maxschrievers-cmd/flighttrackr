@@ -1,42 +1,30 @@
 (() => {
-  const $ = id => document.getElementById(id);
-  const esc = v => String(v ?? "").replace(/[&<>\"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
-  const text = (value, fallback="Nicht verfügbar") => value ? String(value) : fallback;
-  const route = ac => ac.route || ((ac.origin && ac.destination) ? `${ac.origin} → ${ac.destination}` : "Route nicht verfügbar");
-  const airline = ac => ac.airline || ac.operator || "Airline nicht verfügbar";
-  let timer = null;
-
-  function locationFromStorage() {
-    try { return JSON.parse(localStorage.getItem("flighttrackr.settings.v2") || "{}").location || null; } catch { return null; }
+  const esc = v => String(v ?? "Nicht verfügbar").replace(/[&<>\"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
+  const loc = () => { try { return JSON.parse(localStorage.getItem("flighttrackr.settings.v2") || "{}").location || null; } catch { return null; } };
+  const radiusNm = () => Number(localStorage.getItem("flighttrackr.liveRadiusNm") || 54);
+  let panel;
+  function ensurePanel(){
+    if(panel)return panel;
+    const map=document.getElementById("mapMini"); if(!map)return null;
+    panel=document.createElement("section"); panel.id="liveAircraftPanel"; panel.className="live-aircraft-panel";
+    map.insertAdjacentElement("afterend",panel); return panel;
   }
-
-  async function refreshLiveAircraft() {
-    const location = locationFromStorage();
-    if (!location) return;
-    try {
-      const radiusNm = Number(localStorage.getItem("flighttrackr.liveRadiusNm") || 54);
-      const params = new URLSearchParams({lat: location.lat, lon: location.lon, radius: String(Math.max(1, Math.min(250, Math.round(radiusNm))))});
-      const response = await fetch(`/api/nearby?${params}`, {headers:{Accept:"application/json"},cache:"no-store"});
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      const aircraft = data.aircraft || [];
-
-      if (window.layers?.mapMini && window.L) {
-        window.layers.mapMini.clearLayers();
-        for (const ac of aircraft) {
-          if (ac.lat == null || ac.lon == null) continue;
-          const marker = L.circleMarker([ac.lat, ac.lon], {radius:6, weight:2, fillOpacity:.9});
-          marker.bindPopup(`<div style="min-width:220px"><strong style="font-size:16px">${esc(ac.callsign || ac.hex || "Unbekannt")}</strong><hr style="margin:6px 0"><div><strong>Airline:</strong> ${esc(airline(ac))}</div><div><strong>Route:</strong> ${esc(route(ac))}</div><div><strong>Kennzeichen:</strong> ${esc(text(ac.registration, ac.hex || "Nicht verfügbar"))}</div><div><strong>Flugzeug:</strong> ${esc(text(ac.description || ac.type))}</div><div><strong>Höhe:</strong> ${esc(ac.altitude ?? "–")} ft</div><div><strong>Geschwindigkeit:</strong> ${esc(ac.speed != null ? Math.round(ac.speed) + " kt" : "–")}</div><div><strong>Kurs:</strong> ${esc(ac.track != null ? Math.round(ac.track) + "°" : "–")}</div><div><strong>Datenquelle:</strong> ${esc(ac.metadata_source || data.provider || "ADS-B/OpenSky")}</div></div>`);
-          marker.addTo(window.layers.mapMini);
-        }
-      }
-
-      $("aircraftCount") && ($("aircraftCount").textContent = aircraft.length);
-      $("status") && ($("status").textContent = `Live · ${aircraft.length} Flugzeuge · ${aircraft.filter(a => a.route || a.origin || a.destination).length} mit Route`);
-    } catch (error) {
-      console.error("FlightTrackr live radar", error);
-    }
+  function route(a){return a.route || (a.origin&&a.destination?`${a.origin} → ${a.destination}`:"Route nicht verfügbar");}
+  function airline(a){return a.airline || a.operator || "Airline nicht verfügbar";}
+  function render(list){
+    const p=ensurePanel(); if(!p)return;
+    p.innerHTML=`<div class="live-panel-head"><strong>Live-Flugzeuge</strong><span>${list.length}</span></div>`+
+      (list.length?list.slice(0,50).map(a=>`<article class="live-aircraft-row"><div class="live-row-title"><strong>${esc(a.callsign||a.hex||"Unbekannt")}</strong><span>${esc(airline(a))}</span></div><div class="live-row-route"><strong>${esc(route(a))}</strong><span>${esc(a.registration||"Kennzeichen nicht verfügbar")} · ${esc(a.description||a.type||"Aircraft")}</span></div><div class="live-row-meta">${a.altitude!=null?esc(a.altitude)+" ft":"–"} · ${a.speed!=null?esc(Math.round(a.speed))+" kt":"–"} · ${esc(a.metadata_source||"ADS-B")}</div></article>`).join(""):'<div class="live-empty">Keine Flugzeuge im Radius.</div>`;
   }
-
-  window.addEventListener("load", () => { refreshLiveAircraft(); timer = setInterval(refreshLiveAircraft, 15000); });
+  async function refresh(){
+    const l=loc(); if(!l)return;
+    try{
+      const q=new URLSearchParams({lat:l.lat,lon:l.lon,radius:String(Math.max(1,Math.min(250,Math.round(radiusNm()))))});
+      const r=await fetch(`/api/nearby?${q}`,{cache:"no-store",headers:{Accept:"application/json"}}); if(!r.ok)throw new Error(r.status);
+      const d=await r.json(); render(d.aircraft||[]);
+      const c=document.getElementById("aircraftCount");if(c)c.textContent=(d.aircraft||[]).length;
+      const s=document.getElementById("status");if(s)s.textContent=`Live · ${(d.aircraft||[]).length} Flugzeuge`;
+    }catch(e){console.debug("FlightTrackr live refresh",e);}
+  }
+  window.addEventListener("load",()=>{refresh();setInterval(refresh,15000);});
 })();
