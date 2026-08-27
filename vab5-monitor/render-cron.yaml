@@ -1,0 +1,10 @@
+services:
+  - type: cron
+    name: vab5-monitor-check
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: feat/vab5-monitor
+    buildCommand: "cd vab5-monitor && npm install"
+    startCommand: "cd vab5-monitor && node monitor-cron.js"
+    schedule: "*/5 * * * *"
