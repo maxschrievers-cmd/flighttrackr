@@ -1,0 +1,28 @@
+{
+  "$schema":"https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name":"vab5-monitor-pwa",
+  "main":"src/index.ts",
+  "compatibility_date":"2026-08-28",
+  "assets":{
+    "directory":"./public",
+    "not_found_handling":"single-page-application"
+  },
+  "triggers":{
+    "crons":["*/5 * * * *"]
+  },
+  "d1_databases":[
+    {
+      "binding":"DB",
+      "database_name":"vab5-monitor",
+      "database_id":"REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir":"./migrations"
+    }
+  ],
+  "vars":{
+    "OEBB_HAFAS_ENDPOINT":"https://fahrplan.oebb.at/bin/mgate.exe",
+    "OEBB_HAFAS_AID":"OWDL4fE4ixNiPBBm",
+    "OEBB_HAFAS_VERSION":"1.45",
+    "APP_TIMEZONE":"Europe/Vienna"
+  },
+  "observability":{"enabled":true}
+}
