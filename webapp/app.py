@@ -9,14 +9,14 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .providers import lookup_flight, provider_status
+from .providers import enrich_live_aircraft, lookup_flight, provider_status
 from .push import VAPID_PUBLIC_KEY, configured as push_configured, is_gone, send as send_push
 from .push_store import all_subscriptions, remove, upsert
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 ADSBLOL_BASE = "https://api.adsb.lol"
-MAX_RADIUS_NM = 80
+MAX_RADIUS_NM = 250
 RATE_WINDOW_SECONDS = 60
 RATE_LIMIT = 30
 
@@ -30,7 +30,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "geolocation=(self), microphone=(), camera=(), notifications=(self)"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com https://cdn.sheetjs.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self' https://api.adsb.lol https://cdn.sheetjs.com; font-src 'self' https://unpkg.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com https://cdn.sheetjs.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self' https://api.adsb.lol https://api.airplanes.live https://opensky-network.org https://auth.opensky-network.org https://cdn.sheetjs.com; font-src 'self' https://unpkg.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         return response
 
 
@@ -142,11 +142,12 @@ async def nearby(
     radius: float = Query(25, gt=0, le=MAX_RADIUS_NM),
 ):
     _rate_check(request)
+    radius_nm = max(1, min(MAX_RADIUS_NM, radius))
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
             response = await client.get(
-                f"{ADSBLOL_BASE}/v2/point/{lat}/{lon}/{radius}",
-                headers={"Accept": "application/json"},
+                f"{ADSBLOL_BASE}/v2/point/{lat}/{lon}/{radius_nm}",
+                headers={"Accept": "application/json", "User-Agent": "FlightTrackr/1.0"},
             )
             response.raise_for_status()
             data = response.json()
@@ -157,35 +158,39 @@ async def nearby(
     for item in data.get("ac", []):
         if item.get("lat") is None or item.get("lon") is None:
             continue
-        origin = item.get("orig") or item.get("origin")
-        destination = item.get("dest") or item.get("destination")
-        airline = item.get("own") or item.get("owner") or item.get("operator")
-        route = item.get("route") or (f"{origin} → {destination}" if origin and destination else None)
-        aircraft.append(
-            {
-                "hex": item.get("hex"),
-                "callsign": (item.get("flight") or "").strip() or None,
-                "registration": item.get("r"),
-                "type": item.get("t"),
-                "description": item.get("desc"),
-                "airline": airline,
-                "operator": airline,
-                "origin": origin,
-                "destination": destination,
-                "route": route,
-                "lat": item.get("lat"),
-                "lon": item.get("lon"),
-                "altitude": item.get("alt_baro") if item.get("alt_baro") is not None else item.get("alt_geom"),
-                "speed": item.get("gs"),
-                "track": item.get("track"),
-                "vertical_rate": item.get("baro_rate") if item.get("baro_rate") is not None else item.get("geom_rate"),
-                "squawk": item.get("squawk"),
-                "seen": item.get("seen"),
-            }
+        metadata = await enrich_live_aircraft(
+            icao24=item.get("hex"),
+            callsign=(item.get("flight") or "").strip() or None,
+            registration=item.get("r"),
+            base_operator=item.get("own") or item.get("owner"),
+            base_aircraft_type=item.get("t"),
+            base_description=item.get("desc"),
         )
+        aircraft.append({
+            "hex": item.get("hex"),
+            "callsign": (item.get("flight") or "").strip() or None,
+            "registration": metadata.get("registration") or item.get("r"),
+            "airline": metadata.get("airline") or metadata.get("operator"),
+            "operator": metadata.get("operator") or metadata.get("airline"),
+            "type": metadata.get("aircraft_type") or item.get("t"),
+            "description": metadata.get("aircraft_description") or item.get("desc"),
+            "origin": metadata.get("origin"),
+            "destination": metadata.get("destination"),
+            "route": metadata.get("route"),
+            "metadata_source": metadata.get("metadata_source"),
+            "lat": item.get("lat"),
+            "lon": item.get("lon"),
+            "altitude": item.get("alt_baro") if item.get("alt_baro") is not None else item.get("alt_geom"),
+            "speed": item.get("gs"),
+            "track": item.get("track"),
+            "vertical_rate": item.get("baro_rate") if item.get("baro_rate") is not None else item.get("geom_rate"),
+            "squawk": item.get("squawk"),
+            "seen": item.get("seen"),
+        })
     return {
-        "provider": "adsb.lol",
+        "provider": "adsb.lol+opensky",
         "retrieved_at": int(time.time()),
+        "radius_nm": radius_nm,
         "aircraft": aircraft,
     }
 
@@ -198,15 +203,21 @@ async def aircraft(hex_code: str, request: Request):
         raise HTTPException(status_code=400, detail="Invalid ICAO hex code.")
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-            response = await client.get(
-                f"{ADSBLOL_BASE}/v2/hex/{clean}",
-                headers={"Accept": "application/json"},
-            )
+            response = await client.get(f"{ADSBLOL_BASE}/v2/hex/{clean}", headers={"Accept": "application/json"})
             response.raise_for_status()
             data = response.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="Live aircraft provider unavailable.") from exc
-    return {"provider": "adsb.lol", "aircraft": data.get("ac", [])}
+    item = (data.get("ac") or [{}])[0]
+    metadata = await enrich_live_aircraft(
+        icao24=clean,
+        callsign=(item.get("flight") or "").strip() or None,
+        registration=item.get("r"),
+        base_operator=item.get("own") or item.get("owner"),
+        base_aircraft_type=item.get("t"),
+        base_description=item.get("desc"),
+    )
+    return {"provider": "adsb.lol+opensky", "aircraft": item, "metadata": metadata}
 
 
 @app.get("/")
