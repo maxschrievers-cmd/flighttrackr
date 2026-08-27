@@ -1,6 +1,6 @@
 {
   "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
-  "name": "vab5-monitor-pwa",
+  "name": "vab5-monitor",
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-28",
   "assets": {
