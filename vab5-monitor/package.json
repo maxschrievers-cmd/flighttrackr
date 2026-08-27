@@ -1,1 +1,1 @@
-{"name":"vab5-monitor","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node server2.js"},"engines":{"node":">=22"},"dependencies":{"better-sqlite3":"^11.7.0","express":"^5.1.0","web-push":"^3.0.0"}}
+{"name":"vab5-monitor","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node server3.js"},"engines":{"node":">=22"},"dependencies":{"express":"^5.1.0","web-push":"^3.0.0"}}
