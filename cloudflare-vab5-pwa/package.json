@@ -1,9 +1,15 @@
 {
-  "name":"vab",
-  "version":"1.0.0",
-  "private":true,
-  "type":"module",
-  "scripts":{"dev":"wrangler dev","deploy":"wrangler deploy"},
-  "dependencies":{"@cloudflare/workers-types":"^4.20260826.0","wrangler":"^4.32.0","@mmmike/web-push":"^1.3.0"},
-  "devDependencies":{}
+  "name": "vab",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "wrangler": "^4.127.0",
+    "@mmmike/web-push": "^1.3.0"
+  },
+  "devDependencies": {}
 }
