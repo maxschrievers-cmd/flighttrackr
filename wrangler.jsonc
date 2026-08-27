@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flighttrackr-live",
+  "main": "./cloudflare/index.ts",
+  "compatibility_date": "2026-08-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./webapp/static",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "!/api/healthz"]
+  },
+  "vars": {
+    "ORIGIN_BASE_URL": "https://flighttrackr-live-fixed.onrender.com"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
