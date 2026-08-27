@@ -1,0 +1,4 @@
+self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch',()=>{});
+self.addEventListener('push',event=>{let data={title:'VAB 5 Monitor',body:'Neue Verkehrsinformation'};try{data=event.data?.json()||data}catch{}event.waitUntil(self.registration.showNotification(data.title,{body:data.body,tag:data.tag||'vab5-status',data:data.data||{url:'/'},badge:'/icon.svg',icon:'/icon.svg'}))});
+self.addEventListener('notificationclick',event=>{event.notification.close();const url=event.notification.data?.url||'/';event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{const c=list.find(x=>new URL(x.url).pathname===url);return c?c.focus():self.clients.openWindow(url)}))});
