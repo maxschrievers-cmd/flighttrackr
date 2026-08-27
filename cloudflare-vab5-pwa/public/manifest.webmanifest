@@ -1,6 +1,6 @@
 {
-  "name":"VAB 5 Monitor",
-  "short_name":"VAB 5",
+  "name":"VAB",
+  "short_name":"VAB",
   "start_url":"/",
   "display":"standalone",
   "background_color":"#f5f7fa",
