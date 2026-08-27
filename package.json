@@ -1,0 +1,13 @@
+{
+  "name": "flighttrackr-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cf:check": "wrangler check",
+    "cf:deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.30.0"
+  }
+}
